@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/ericcsr/catkin_ws/src/detection/src/install/setup.sh
