@@ -1,7 +1,3 @@
-#include <message_filters/time_synchronizer.h>
-#include <sensor_msgs/image_encodings.h>
-#include <message_filters/subscriber.h>
-#include <sensor_msgs/Image.h>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
@@ -11,283 +7,259 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <iomanip>
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
 #include <geometry_msgs/Vector3.h>
 #include <msgs/Armors.h>
 #include <msgs/ArmorItem.h>
+#include "plain_detect.h"
+#include "tools.h"
+#include "auto_aiming.h"
+using namespace cv;
 using namespace std;
 
-const int start_num = 37, picture_count = 10;
-const int img_width = 640, img_height = 480;
-bool test_speed = true, test_acc = false;
+// Camera parameters: /opt/MVS/Samples/64/Python/ParametrizeCamera_LoadAndSave
 
-auto start = chrono::high_resolution_clock::now();
+/*
+Modes:
+0 - Velocity
+1 - Acceleration
+2 - ???
+*/
 
-int cnt = 0;
-
-ros::Publisher pub;
-
-double distance(Point2f l, Point2f r)
+void AutoAiming::shootTarget(Armor tar)
 {
-    return sqrt(pow(l.x - r.x, 2) + pow(l.y - r.y, 2));
+    if (SHOOT_X > tar.upper_l.x && SHOOT_X < tar.lower_r.x && 
+        SHOOT_Y > tar.upper_l.y && SHOOT_Y < tar.lower_r.y)
+        controller->shoot(1);
 }
 
-class Armor
+Armor AutoAiming::pickTarget(vector<Armor> armors)
 {
-    public:
-        Armor(const RotatedRect& left, const RotatedRect& right)
+    Armor tar = Armor();
+    int max_area = 0;
+    vector<double> dists = {};
+    if (armors.size() == 0)
+        return tar;
+    //cout << "Armors detected: " << armors.size() << endl;
+    for (size_t i = 0; i < armors.size(); i++)
+    {
+        if (armors[i].area() > max_area)
         {
-            RotatedRect new_left(left.center, Size(left.size.width, left.size.height * 2), left.angle);
-            RotatedRect new_right(right.center, Size(right.size.width, right.size.height * 2), right.angle);
-            Point2f points_l[4], points_r[4];
-            new_left.points(points_l);
-            new_right.points(points_r);
-            upper_l = points_l[2], lower_l = points_l[3], upper_r = points_r[1], lower_r = points_r[0];
-            center.x = (upper_l.x + lower_r.x) / 2;
-            center.y = (upper_l.y + lower_r.y) / 2;
+            max_area = armors[i].area();
+            tar = armors[i];
         }
-        vector<Point2f> points()
-        {
-            vector<Point2f> vertices;
-            vertices.push_back(lower_l);
-            vertices.push_back(upper_l);
-            vertices.push_back(upper_r);
-            vertices.push_back(lower_r);
-            return vertices;
-        }
-        vector<Point2i> coordinates()
-        {
-            vector<Point2f> vertices = this->points();
-            vector<Point2i> coords;
-            for (size_t i = 0; i < vertices.size(); i++)
-                coords.push_back(Point2i(max((int)vertices[i].x, 0), max((int)vertices[i].y, 0)));
-            return coords;
-        }
-        double area()
-        {
-            return sqrt(pow(distance(upper_l, lower_l), 2) + pow(distance(upper_l, upper_r), 2));
-        }
-        Point2f center, upper_l, lower_l, upper_r, lower_r;
-};
-
-class Detector
-{
-    private:
-        /*const int brightness_threshold = 60;
-        const int light_min_area = 10;
-        const double light_max_angle = 45.0;
-        const double light_min_size = 3.0;
-        const double light_contour_min_solidity = 0.5;
-        const double light_max_ratio = 0.4;
-        const double light_color_detect_extend_ratio = 1.1;
-        const double light_max_angle_diff = 7.0;
-        const double light_max_length_diff_ratio = 0.2;
-        const double light_max_y_diff_ratio = 2.0;
-        const double light_min_x_diff_ratio = 0.5;
-        const double armor_min_aspect_ratio = 1.0;
-        const double armor_max_aspect_ratio = 5.0;*/
-        const int brightness_threshold = 60;
-        const int light_min_area = 10;
-        const double light_max_angle = 45.0;
-        const double light_min_size = 3.0;
-        const double light_contour_min_solidity = 0.3;
-        const double light_max_ratio = 0.6;
-        const double light_color_detect_extend_ratio = 1.1;
-        const double light_max_angle_diff = 7.0;
-        const double light_max_length_diff_ratio = 0.3;
-        const double light_max_y_diff_ratio = 2.0;
-        const double light_min_x_diff_ratio = 0.5;
-        const double armor_min_aspect_ratio = 1.0;
-        const double armor_max_aspect_ratio = 5.0;
+        if (last_tar.center.x != 0 && last_tar.center.y != 0)
+            dists.emplace_back(point_distance(last_tar.center, tar.center));
+    }
     
-        Mat separateColors(Mat img, char color)
+    if (last_tar.center.x != 0 && last_tar.center.y != 0)
+    {
+        int last_tar_index = distance(dists.begin(), min_element(dists.begin(), dists.end()));
+        //cout << "Last target: " << last_tar.center.x << " " << last_tar.center.y << endl;
+        if (armors[last_tar_index].area() >= MIN_TARGET_AREA)
         {
-            vector<Mat> channels;
-            split(img, channels);
+            tar = armors[last_tar_index];
+            //cout << "Current target: " << tar.center.x << " " << tar.center.y << " " << tar.area() << endl;
+        }
+    }
 
-            Mat gray_img;
+    return tar;
+}
 
-            if (color == 'r')
-                gray_img = channels.at(2) - channels.at(0);
-            else
-                gray_img = channels.at(0) - channels.at(2);
+void AutoAiming::traceTarget(Armor tar)
+{
+    if (tar.empty())
+        return;
+    
+    double vx = 0, vy = 0;
+    double dx = 0, dy = 0;
+    double ax = 0, ay = 0;
 
-            return gray_img;
+    int cx = SHOOT_X, cy = SHOOT_Y;
+
+    pred_tar = tar.center;
+
+    //cout << "Center: " << cx << ", Target: " << tar.upper_l.x 
+    //    << "-" << tar.lower_r.x << endl;
+    
+    if (x_on_target && (cx - tar.lower_r.x) * last_act.x < 0 
+        && (cx - tar.upper_l.x) * last_act.x < 0)
+        mode = 0;
+    
+    if (x_on_target && (cx - tar.lower_r.x) * last_act.x > 0
+        && (cx - tar.upper_l.x) * last_act.x > 0)
+        mode = 1;
+
+    if (cx >= tar.upper_l.x && cx <= tar.lower_r.x)
+        x_on_target = true;
+    else
+        x_on_target = false;
+    
+    //cout << "Mode: " << ((mode == 1) ? "Acceleration" : "Velocity") << endl;
+
+    if (mode == 1)
+    {
+        if (!last_tar.empty())
+        {
+            vx = tar.center.x - last_tar.center.x;
+            vy = tar.center.y - last_tar.center.y;
         }
 
-        Mat binarization(Mat img)
-        {
-            Mat bin_bright_img;
-
-            threshold(img, bin_bright_img, brightness_threshold, 255, THRESH_BINARY);
-
-            Mat element = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
-
-            dilate(bin_bright_img, bin_bright_img, element);
-            //imshow("Binarization", bin_bright_img);
-            //waitKey();
-
-            return bin_bright_img;
-        }
+        pred_tar.x += vx * 30;
+        pred_tar.y += vy * 30;
         
-        vector<vector<Point>> getContours(Mat img)
+        if (abs(pred_tar.x - cx) > TARGET_ZONE)
         {
-            vector<vector<Point>> light_contours;
-            findContours(img.clone(), light_contours, RetrievalModes::RETR_EXTERNAL, ContourApproximationModes::CHAIN_APPROX_SIMPLE);
-
-            return light_contours;
+            ax = min(pow((double)abs(pred_tar.x - cx) / YAW_RANGE_2, 6), 1.0) * MAX_YAW_ACC;
+            ax = max(ax, MIN_YAW_ACC);
+            if (pred_tar.x > cx)
+                ax = -ax;
         }
 
-        RotatedRect& adjustRec(RotatedRect& rec)
+        if (abs(pred_tar.y - cy) > TARGET_ZONE)
         {
-            using std::swap;
-
-            float& width = rec.size.width;
-            float& height = rec.size.height;
-            float& angle = rec.angle;
-
-            while (angle >= 90.0) angle -= 180.0;
-            while (angle < -90.0) angle += 180.0;
-
-            if (angle >= 45.0)
-            {
-                swap(width, height);
-                angle -= 90.0;
-            }
-            else if (angle < -45.0)
-            {
-                    swap(width, height);
-                    angle += 90.0;
-            }
-
-            return rec;
+            ay = min(pow((double)abs(pred_tar.y - cy) / PITCH_RANGE, 6), 1.0) * MAX_PITCH_ACC;
+            ay = max(ay, MIN_PITCH_ACC);
+            if (pred_tar.y > cy)
+                ay = -ay;
         }
 
-        static bool compareLightIndicators(RotatedRect l1, RotatedRect l2)
-        {
-            return l1.center.x < l2.center.x;
-        }
-
-        vector<vector<Point>> filterContours(vector<vector<Point>>& light_contours, vector<RotatedRect>& light_info)
-        {
-            vector<vector<Point>> remaining_contours;
-            for (const auto& contour:light_contours)
-            {
-                float light_contour_area = contourArea(contour);
-                if (light_contour_area < light_min_area)
-                    continue;
-                RotatedRect light_rec = fitEllipse(contour);
-                adjustRec(light_rec);
-                if (light_rec.size.width / light_rec.size.height > light_max_ratio ||
-                    light_contour_area / light_rec.size.area() < light_contour_min_solidity)
-                        continue;
-                light_rec.size.width *= light_color_detect_extend_ratio;
-                light_rec.size.height *= light_color_detect_extend_ratio;
-                
-                light_info.push_back(RotatedRect(light_rec));
-                remaining_contours.push_back(contour);
-            }
-            return remaining_contours;
-        }
-
-        vector<Armor> matchArmor(vector<RotatedRect>& light_info)
-        {
-            vector<Armor> armors;
-
-            sort(light_info.begin(), light_info.end(), compareLightIndicators);
-            for (size_t i = 0; i < light_info.size(); i++)
-            {
-                const RotatedRect& left = light_info[i];
-                for (size_t j = i + 1; j < light_info.size(); j++)
-                {
-                    const RotatedRect& right = light_info[j];
-                    
-                    double angle_diff = abs(left.angle - right.angle);
-                    double len_diff_ratio = abs(left.size.height - right.size.height) / max(left.size.height, right.size.height);
-                    
-                    if (angle_diff > light_max_angle_diff || len_diff_ratio > light_max_length_diff_ratio)
-                        continue;
-
-                    double dis = distance(left.center, right.center);
-                    double mean_len = (left.size.height + right.size.height) / 2;
-                    double x_diff_ratio = abs(left.center.x - right.center.x) / mean_len;
-                    double y_diff_ratio = abs(left.center.y - right.center.y) / mean_len;
-                    double dis_ratio = dis / mean_len;
-                    if (y_diff_ratio > light_max_y_diff_ratio || 
-                        x_diff_ratio < light_min_x_diff_ratio ||
-                        dis_ratio > armor_max_aspect_ratio ||
-                        dis_ratio < armor_min_aspect_ratio)
-                        continue;
-                    Armor armor(left, right);
-                    armors.push_back(armor);
-                }
-            }
-            return armors;
-        }
-
-    void showArmor(Mat img, vector<Armor> armors)
-    {
-        for (size_t i = 0; i < armors.size(); i++)
-        {
-            circle(img, armors[i].center, 1, Scalar(0, 255, 0), 10);
-            vector<Point2i> armor_points = armors[i].coordinates();
-            polylines(img, armor_points, true, Scalar(0, 255, 0), 1);
-        }
-        imshow("Armor", img);
-        waitKey();
+        dx = last_act.x + ax * ACC_MULTIPLIER;
+        if (abs(dx) > MAX_YAW)
+            dx = MAX_YAW * ((dx > 0) ? 1 : -1);
+        dy = last_act.y + ay * ACC_MULTIPLIER;
+        if (abs(dy) > MAX_PITCH)
+            dy = MAX_PITCH * ((dy > 0) ? 1 : -1);
     }
 
-    void drawAllContours(Mat img, vector<vector<Point>> light_contours)
+    if (mode == 0)
     {
-        for (size_t i = 0; i < light_contours.size(); i++)
-            drawContours(img, light_contours, i, Scalar(0, 0, 255), 1);
+        if (abs(tar.center.x - cx) > TARGET_ZONE)
+        {
+            dx = min(abs(tar.center.x - cx) / YAW_RANGE_1, 1.0) * MAX_YAW;
+            dx = max(dx, MIN_YAW);
+            if (tar.center.x > cx)
+                dx = -dx;
+        }
+
+        if (abs(tar.center.y - cy) > TARGET_ZONE)
+        {
+            dy = min(abs(tar.center.y - cy) / PITCH_RANGE, 1.0) * MAX_PITCH;
+            dy = max(dy, MIN_PITCH);
+            if (tar.center.y > cy)
+                dy = -dy;
+        }
     }
 
-    public:
-        vector<Armor> analyze(Mat img, char color)
-        {
-            Mat debug_img = img.clone();
-            img = separateColors(img, color);
-            img = binarization(img);
-            Mat bin_img = img.clone();
-            vector<vector<Point>> contours = getContours(img);
-            //cout << contours.size() << endl;
+    //cout << mode << " " << vx << " " << vy << " " << ax << " " << ay << " " << dx << " " << dy << endl;
 
-            vector<RotatedRect> light_info;
-            contours = filterContours(contours, light_info);
+    controller->moveGimbal(dx, -dy, PITCH_OFFSET);
 
-            drawAllContours(debug_img, contours);
-
-            vector<Armor> armors = matchArmor(light_info);
-
-            //cout << "Found " << armors.size() << " armor(s)" << endl;
-            if (test_acc) showArmor(debug_img, armors);
-            
-            return armors;
-        }
-};
-
-void callback(const sensor_msgs::ImageConstPtr& img, const msgs::Armors& armors) {
-    
-  char color = 'r';
-  AutoAiming aimer;
-  
-  cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_8UC3);
-  cv::Mat img = cv_ptr->image;
+    act = Point2d(dx, dy);
+    //cout << "Act: " << act.x << " " << act.y << endl;
 }
 
-int main(int argc, char **argv) {
-  ros::init(argc, argv, "armor_detector");
-  ros::NodeHandle handler;
+// publishAnnotatedImage not implemented
 
-  message_filters::Subscriber<Image> img_sub(handler, "image", 1);
-  message_filters::Subscriber<Armors> tar_sub(handler, "camera_info", 1);
-  typedef sync_policies::ApproximateTime<Image, Image> MySyncPolicy;
-  Synchronizer<MySyncPolicy> sync(MySyncPolicy(1), img_sub, tar_sub); // 1 is queue size
-  sync.registerCallback(boost::bind(&callback, _1, _2));
+AutoAiming::AutoAiming()
+{
+    last_act = Point2d(0, 0);
+    last_tar = Armor();
+    x_on_target = false;
+    mode = 1; // acceleration
+}
 
-  ros::spin();
-  return 0;
+void AutoAiming::aim(Mat img, char color)
+{
+    controller = new Controller();
+    cv_bridge::CvImagePtr cv_ptr;
+
+    //auto time0 = chrono::high_resolution_clock::now();
+
+    vector<Armor> armors = Detector::analyze(img, color);
+
+    //auto time1 = chrono::high_resolution_clock::now();
+    //double duration = chrono::duration_cast<chrono::nanoseconds>(time1 - time0).count() / 1e9;
+    //cout << "Detection: " << duration << " seconds." << endl;
+
+    //time0 = chrono::high_resolution_clock::now();
+    Armor target = pickTarget(armors);
+
+    traceTarget(target);
+
+    shootTarget(target);
+
+    last_tar = target;
+    last_act = act;
+    //time1 = chrono::high_resolution_clock::now();
+    //duration = chrono::duration_cast<chrono::nanoseconds>(time1 - time0).count() / 1e9;
+    //cout << "Aiming: " << duration << " seconds." << endl;
+    //cout << fixed << setprecision(9) << time1.time_since_epoch().count() / (1e9) << endl;
+}
+
+void AutoAiming::publishArmorImage(Mat img, Armor armor)
+{
+    Mat cropped_img = img[armor.upper_l.x:armor.lower_r.x, armor.upper_l.y:armor.lower_r.y];
+
+    cv_bridge::CvImage out_msg;
+    out_msg.header = msg->header;
+    out_msg.encoding = sensor_msgs::image_encodings::TYPE_8UC3;
+    out_msg.image = cropped_img;
+    img_pub.publish(out_msg.toImageMsg());
+}
+
+AutoAiming aim_object;
+auto time_start = chrono::high_resolution_clock::now();
+int aiming_cnt = 0;
+
+void callback(const sensor_msgs::ImageConstPtr& msg)
+{
+    auto start = chrono::high_resolution_clock::now();
+    char color = 'r';
+    
+    if (aiming_cnt == 0)
+        time_start = chrono::high_resolution_clock::now();
+
+    cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_8UC3);
+    
+    Mat img = cv_ptr->image;
+    img = changeGamma(img, IMAGE_GAMMA);
+
+    aiming_cnt++;
+
+    aim_object.aim(img, color);
+    
+    auto time_end = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::nanoseconds>(time_end - time_start).count() / 1e9;
+    cout << "Aiming count: " << aiming_cnt << " Time elapsed: " << fixed << setprecision(9) << duration << " seconds." << endl;
+    //resize(img, img, Size(img_width, img_height));
+    //result_msg.img = *cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
+}
+
+Mat changeGamma(Mat img, double gamma)
+{
+    Mat lookUpTable(1, 256, CV_8U);
+    uchar* p = lookUpTable.ptr();
+    for( int i = 0; i < 256; ++i)
+        p[i] = saturate_cast<uchar>(pow(i / 255.0, gamma) * 255.0);
+    Mat res = img.clone();
+    LUT(img, lookUpTable, res);
+    return res;
+}
+
+int main(int argc, char **argv)
+{
+    ros::init(argc, argv, "auto_aiming");
+    ros::NodeHandle n;
+
+    aim_object.img_pub = n.advertise<sensor_msgs::Image>("gamma_changed_image", 10);
+    ros::Subscriber sub = n.subscribe("/hikrobot_camera/rgb", 10, callback);
+    ros::spin();
+
+    return 0;
 }
