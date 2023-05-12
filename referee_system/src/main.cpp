@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <iostream>
 #include "ros/ros.h"
-#include "std_msgs/uint8_t.h"
+#include "std_msgs/UInt8.h"
 
 const int bufLength = 1025;
 uint8_t buf[bufLength];
@@ -13,7 +13,7 @@ DJICRCHelper djiCRCHelper;
 FrameHeaderWithCmd frameHeadereWithCmd;
 MatchStatus matchStatus;
 
-int main()
+int main(int argc, char** argv)
 {
     ros::init(argc, argv, "referee_system");
     ros::NodeHandle n;
@@ -23,9 +23,9 @@ int main()
         spdlog::error("Cannot Open Serial Port");
         return -1;
     }
-    ros::Publisher heat_pub = n.advertise<std_msg::uint8_t>("sentry_heat", 50);
-    ros::Publisher start_pub = n.advertise<std_msg::uint8_t>("judge_start", 3);
-    ros::Publisher color_pub = n.advertise<std_msg::uint8_t>("judge_color", 10);
+    ros::Publisher heat_pub = n.advertise<std_msgs::UInt8>("sentry_heat", 50);
+    ros::Publisher start_pub = n.advertise<std_msgs::UInt8>("judge_start", 3);
+    ros::Publisher color_pub = n.advertise<std_msgs::UInt8>("judge_color", 10);
 
     while (ros::ok())
     {
