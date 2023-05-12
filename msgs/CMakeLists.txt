@@ -52,6 +52,7 @@ add_message_files(
    FILES
    ArmorItem.msg
    Armors.msg
+   Attack_cmd.msg
 #   Message2.msg
 )
 

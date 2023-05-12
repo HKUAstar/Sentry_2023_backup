@@ -1,4 +1,0 @@
-<launch>
-    <node pkg="move" type="keyb_move_plus.py" name="keyb_move_plus" output="screen" />
-    <node pkg="move" type="key_control.cpp" name="ks" />
-</launch>

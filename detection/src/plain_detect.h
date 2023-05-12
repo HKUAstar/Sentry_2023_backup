@@ -21,24 +21,25 @@ public:
     double area();
     Point2f center, upper_l, lower_l, upper_r, lower_r;
     bool empty();
+    static bool cmp(Armor &x, Armor &y);
+    int id = 0;
 };
 
 class Detector
 {
 private:
-    static const int brightness_threshold = 30; // 60
-    static const int light_min_area = 10;
+    static const int brightness_threshold = 60;
+    static const int light_min_area = 100.0;
     static constexpr double light_max_angle = 45.0;
-    static constexpr double light_min_size = 3.0;
     static constexpr double light_contour_min_solidity = 0.3; // 0.5
     static constexpr double light_max_ratio = 0.6; // 0.4
     static constexpr double light_color_detect_extend_ratio = 1.1;
-    static constexpr double light_max_angle_diff = 7.0;
+    static constexpr double light_max_angle_diff = 6.0; // 7.0
     static constexpr double light_max_length_diff_ratio = 0.3; // 0.2
     static constexpr double light_max_y_diff_ratio = 2.0;
     static constexpr double light_min_x_diff_ratio = 0.5;
     static constexpr double armor_min_aspect_ratio = 1.0;
-    static constexpr double armor_max_aspect_ratio = 5.0;
+    static constexpr double armor_max_aspect_ratio = 3.5; // 5.0
 
     static Mat separateColors(Mat img, char color);
     static Mat binarization(Mat img);

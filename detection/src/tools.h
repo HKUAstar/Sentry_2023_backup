@@ -7,7 +7,7 @@ class Controller
 {
 public:
     Controller();
-    void moveGimbal(double yaw_angle, double pitch_angle, double pitch_offset);
+    void moveGimbal(double yaw_angle, double pitch_angle, double pitch_offset = 0.000, bool absolute = false);
     void shoot(int mode, int number = 1);
     void endshoot();
     bool empty();

@@ -52,6 +52,8 @@
   <build_depend>rospy</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>msgs</build_depend>
+  <build_depend>move_test</build_depend>
+  <build_depend>referee_system</build_depend>
   <build_export_depend>rospy</build_export_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>roscpp</exec_depend>

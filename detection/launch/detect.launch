@@ -1,5 +1,5 @@
 <launch>
-    <include file="$(find roborts_base)/launch/base.launch" />
-    <include file="$(find realsense2_camera)/launch/rs_camera.launch" />
-    <node pkg="detection" type="trivial_detect.py" name="auto_aiming_test" output="screen" />
+    <!-- include file="$(find roborts_base)/launch/base.launch" -->
+    <include file="$(find hikrobot_camera)/launch/hikrobot_camera.launch" />
+    <node pkg="detection" type="detection_node" name="detection_node" output="screen" />
 </launch>

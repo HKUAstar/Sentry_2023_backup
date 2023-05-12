@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(detection)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++11 -O2)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   msgs
   rospy
   roscpp
-  ros_numpy
+#  ros_numpy
   cv_bridge
   OpenCV REQUIRED
 )
@@ -122,6 +122,11 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_LIBS}
+  /opt/MVS/include
+)
+
+LINK_DIRECTORIES(
+/opt/MVS/lib/64/
 )
 
 ## Declare a C++ library
@@ -137,7 +142,9 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/plain_detect.cpp)
+add_executable(${PROJECT_NAME}_node src/plain_detect.cpp src/auto_aiming.cpp src/tools.cpp)
+
+add_executable(${PROJECT_NAME}_fake_node src/fake_auto_aiming.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -152,6 +159,15 @@ add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
     ${catkin_LIBRARIES}
+    /opt/MVS/lib/64
+    MvCameraControl
+    MVGigEVisionSDK
+    MVRender
+    MvUsb3vTL
+)
+
+target_link_libraries(${PROJECT_NAME}_fake_node
+    ${catkin_LIBRARIES}
 )
 
 #############
@@ -164,15 +180,15 @@ target_link_libraries(${PROJECT_NAME}_node
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-   src/grab.py
-   src/detect.py
-   src/trivial_detect.py
-   src/tools.py
-   src/measure.py
-   src/grab_mv.py
-   src/mvsdk.py
-   src/receiver_mv.py
-   src/auto_aiming.py
+#   src/grab.py
+#   src/detect.py
+#   src/trivial_detect.py
+#   src/tools.py
+#   src/measure.py
+#   src/grab_mv.py
+#   src/mvsdk.py
+#   src/receiver_mv.py
+#   src/auto_aiming.py
    # src/fps_test.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

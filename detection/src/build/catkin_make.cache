@@ -1,2 +1,2 @@
 
--DCATKIN_DEVEL_PREFIX=/home/ericcsr/catkin_ws/src/detection/src/devel -DCMAKE_INSTALL_PREFIX=/home/ericcsr/catkin_ws/src/detection/src/install -G Unix Makefiles
+-DCATKIN_DEVEL_PREFIX=/home/astar/catkin_ws/src/Sentry/detection/src/devel -DCMAKE_INSTALL_PREFIX=/home/astar/catkin_ws/src/Sentry/detection/src/install -G Unix Makefiles

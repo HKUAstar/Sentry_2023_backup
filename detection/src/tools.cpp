@@ -1,6 +1,7 @@
 #include <iostream>
 #include <roborts_msgs/GimbalAngle.h>
 #include <roborts_msgs/ShootCmd.h>
+#include <number_recognition/img_msg.h>
 #include "tools.h"
 
 Controller::Controller()
@@ -18,6 +19,7 @@ void Controller::shoot(int mode, int number)
     srv.request.mode = mode;
     srv.request.number = number;
     count++;
+    
     if (client.call(srv))
         std::cout << "Shoot service call successful." << std::endl;
     else
@@ -35,12 +37,19 @@ void Controller::endshoot()
         std::cout << "Shoot service call unsuccessful." << std::endl;
 }
 
-void Controller::moveGimbal(double yaw_angle, double pitch_angle, double pitch_offset)
+void Controller::moveGimbal(double yaw_angle, double pitch_angle, double pitch_offset, bool absolute)
 {
     roborts_msgs::GimbalAngle msg;
-    msg.yaw_mode = 1;
-    msg.pitch_mode = 1;
+    if (absolute)
+        msg.yaw_mode = 0;
+    else
+        msg.yaw_mode = 1;
+    if (absolute)
+        msg.pitch_mode = 0;
+    else
+        msg.pitch_mode = 1;
     msg.yaw_angle = yaw_angle;
     msg.pitch_angle = pitch_angle - pitch_offset;
+    std::cout << "Move gimbal: " << yaw_angle << " " << pitch_angle << std::endl;
     pub.publish(msg);
 }

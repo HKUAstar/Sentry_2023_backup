@@ -27,6 +27,11 @@ double point_distance(Point2f l, Point2f r)
     return sqrt(pow(l.x - r.x, 2) + pow(l.y - r.y, 2));
 }
 
+bool Armor::cmp(Armor &x, Armor &y)
+{
+    return x.area() > y.area();
+}
+
 Armor::Armor(const RotatedRect& left, const RotatedRect& right)
 {
     RotatedRect new_left(left.center, Size(left.size.width, left.size.height * 2), left.angle);
@@ -71,9 +76,13 @@ vector<Point2i> Armor::coordinates()
     return coords;
 }
 
+
+//def calcArea(x1, y1, x2, y2, x3, y3):
+//    return 2 * (x1 * y2 - x1 * y3 + x2 * y3 - x2 * y1 + x3 * y1 - x3 * y2)
 double Armor::area()
 {
-    return (lower_r.x - upper_l.x) * (lower_r.y - upper_l.y);
+    return abs(2 * (upper_l.x * upper_r.y - upper_l.x * lower_l.y + upper_r.x * lower_l.y 
+        - upper_r.x * upper_l.y + lower_l.x * upper_l.y - lower_l.x * upper_r.y));
 }
 
 Mat Detector::separateColors(Mat img, char color)
@@ -151,6 +160,8 @@ vector<vector<Point>> Detector::filterContours(vector<vector<Point>>& light_cont
     {
         float light_contour_area = contourArea(contour);
         if (light_contour_area < light_min_area)
+            continue;
+        if (contour.size() < 5)
             continue;
         RotatedRect light_rec = fitEllipse(contour);
         adjustRec(light_rec);
