@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="move_test" type="StartupLocation.py" name="startup_move" />
+    <node pkg="move_test" type="rotation3.py" name="rotation_" />
+    <node pkg="move_test" type="track_gimbal.py" name="track_gimbal_" />
+</launch>
