@@ -36,13 +36,15 @@ Modes:
 2 - Idle
 */
 
+int cnt = 0;
+
 void AutoAiming::shootTarget(Armor tar)
 {
     if (tar.empty())
         return;
-    if (SHOOT_X > tar.upper_l.x && SHOOT_X < tar.lower_r.x && 
-        SHOOT_Y > tar.upper_l.y && SHOOT_Y < tar.lower_r.y)
-        controller->shoot(1);
+    //if (SHOOT_X > tar.upper_l.x && SHOOT_X < tar.lower_r.x && 
+    //    SHOOT_Y > tar.upper_l.y && SHOOT_Y < tar.lower_r.y)
+    controller->shoot(1);
 }
 
 void AutoAiming::matchArmors(Mat &img, vector<Armor> &armors)
@@ -112,6 +114,7 @@ Armor AutoAiming::pickTarget(vector<Armor> &armors)
 
 void AutoAiming::traceTarget(Armor tar)
 {
+    /*
     if (tar.empty())
     {
         missed_tar++;
@@ -132,98 +135,34 @@ void AutoAiming::traceTarget(Armor tar)
             idle_angle = 0;
         return;
     }
+    */
 
     if (tar.empty())
         return;
 
     missed_tar = 0;
     
-    double vx = 0, vy = 0;
-    double dx = 0, dy = 0;
-    double ax = 0, ay = 0;
-
-    int cx = SHOOT_X, cy = SHOOT_Y;
-
-    pred_tar = tar.center;
-
-    //cout << "Center: " << cx << ", Target: " << tar.upper_l.x 
-    //    << "-" << tar.lower_r.x << endl;
-    
-    if (x_on_target && (cx - tar.lower_r.x) * last_act.x < 0 
-        && (cx - tar.upper_l.x) * last_act.x < 0)
-        mode = 0;
-    
-    if (x_on_target && (cx - tar.lower_r.x) * last_act.x > 0
-        && (cx - tar.upper_l.x) * last_act.x > 0)
-        mode = 1;
-
-    if (cx >= tar.upper_l.x && cx <= tar.lower_r.x)
-        x_on_target = true;
-    else
-        x_on_target = false;
-    
-    //cout << "Mode: " << ((mode == 1) ? "Acceleration" : "Velocity") << endl;
-
-    if (mode == 1)
-    {
-        if (!last_tar.empty())
-        {
-            vx = tar.center.x - last_tar.center.x;
-            vy = tar.center.y - last_tar.center.y;
-        }
-
-        pred_tar.x += vx * 30;
-        pred_tar.y += vy * 30;
-        
-        if (abs(pred_tar.x - cx) > TARGET_ZONE)
-        {
-            ax = min(pow((double)abs(pred_tar.x - cx) / YAW_RANGE_2, 6), 1.0) * MAX_YAW_ACC;
-            ax = max(ax, MIN_YAW_ACC);
-            if (pred_tar.x > cx)
-                ax = -ax;
-        }
-
-        if (abs(pred_tar.y - cy) > TARGET_ZONE)
-        {
-            ay = min(pow((double)abs(pred_tar.y - cy) / PITCH_RANGE, 6), 1.0) * MAX_PITCH_ACC;
-            ay = max(ay, MIN_PITCH_ACC);
-            if (pred_tar.y > cy)
-                ay = -ay;
-        }
-
-        dx = last_act.x + ax * ACC_MULTIPLIER;
-        if (abs(dx) > MAX_YAW)
-            dx = MAX_YAW * ((dx > 0) ? 1 : -1);
-        dy = last_act.y + ay * ACC_MULTIPLIER;
-        if (abs(dy) > MAX_PITCH)
-            dy = MAX_PITCH * ((dy > 0) ? 1 : -1);
-    }
-
-    if (mode == 0)
-    {
-        if (abs(tar.center.x - cx) > TARGET_ZONE)
-        {
-            dx = min(abs(tar.center.x - cx) / YAW_RANGE_1, 1.0) * MAX_YAW;
-            dx = max(dx, MIN_YAW);
-            if (tar.center.x > cx)
-                dx = -dx;
-        }
-
-        if (abs(tar.center.y - cy) > TARGET_ZONE)
-        {
-            dy = min(abs(tar.center.y - cy) / PITCH_RANGE, 1.0) * MAX_PITCH;
-            dy = max(dy, MIN_PITCH);
-            if (tar.center.y > cy)
-                dy = -dy;
-        }
-    }
-
-    //cout << mode << " " << vx << " " << vy << " " << ax << " " << ay << " " << dx << " " << dy << endl;
-
-    controller->moveGimbal(dx, -dy, PITCH_OFFSET);
-
-    act = Point2d(dx, dy);
-    //cout << "Act: " << act.x << " " << act.y << endl;
+    //ros::Time time0 = ros::Time::now();
+    cv::Mat p_img = (cv::Mat_<double>(4, 2) << tar.upper_l.x, tar.upper_l.y, tar.lower_l.x, tar.lower_l.y, tar.lower_r.x, tar.lower_r.y, tar.upper_r.x, tar.upper_r.y);
+    std::cout << "Got armor position at: " << p_img.row(0) << " " << p_img.row(1) << " " << p_img.row(2) << " " << p_img.row(3) << std::endl;
+    cv::Mat rvec, tvec;
+    pixel_to_cam(p_img, camera_mtx, camera_dist, rvec, tvec);
+    std::cout << "Position in camera coordinate system: " << tvec.at<double>(0) << " " << tvec.at<double>(1) << " " << tvec.at<double>(2) << std::endl;
+    cv::Mat predicted_tvec = predictor.predict(tvec).rowRange(0, 3);
+    std::cout << "Predicted position: " << predicted_tvec.at<float>(0) << " " << predicted_tvec.at<float>(1) << " " << predicted_tvec.at<float>(2) << std::endl;
+    if (predicted_tvec.at<float>(2) == 0)
+        return;
+    predicted_tvec -= cv::Mat(center);
+    std::cout << predicted_tvec.at<float>(0) << " " << predicted_tvec.at<float>(2) << std::endl;
+    float yaw_angle = std::atan(predicted_tvec.at<float>(0) / predicted_tvec.at<float>(2));
+    float pitch_angle = std::atan(predicted_tvec.at<float>(1) / predicted_tvec.at<float>(2));
+    std::cout << "Yaw: " << yaw_angle / CV_PI * 180 << " degrees ";
+    std::cout << (yaw_angle > 0 ? "right" : "left") << ", Pitch: " << pitch_angle / CV_PI * 180 << " degrees ";
+    std::cout << (pitch_angle > 0 ? "down" : "up") << std::endl;
+    if (++cnt % 4 == 0)
+        controller->moveGimbal(-yaw_angle, pitch_angle);
+    //ros::Time time1 = ros::Time::now();
+    //std::cout << (time1 - time0).toSec() << std::endl;
 }
 
 // publishAnnotatedImage not implemented
@@ -321,14 +260,15 @@ void AutoAiming::publishArmor()
     for (int i = 0; i < last_armors.size(); i++)
     {
         msgs::ArmorItem item;
-        /*
+        
         item.x1 = max((int)last_armors[i].upper_l.x, 0);
         item.y1 = max((int)last_armors[i].upper_l.y, 0);
-        item.x2 = min((int)last_armors[i].upper_r.x, IMG_W);
-        item.y2 = max((int)last_armors[i].upper_r.y, 0);
-        item.x3 = max((int)last_armors[i].lower_l.x, 0);
-        item.y3 = min((int)last_armors[i].lower_l.y, IMG_H);
-        */
+        item.x2 = max((int)last_armors[i].lower_l.x, 0);
+        item.y2 = min((int)last_armors[i].lower_l.y, IMG_H);
+        item.x3 = min((int)last_armors[i].lower_r.x, IMG_W);
+        item.y3 = min((int)last_armors[i].lower_r.y, IMG_H);
+        item.x4 = min((int)last_armors[i].upper_r.x, IMG_W);
+        item.y4 = max((int)last_armors[i].upper_r.y, 0);
         item.area = last_armors[i].area();
         item.id = last_armors[i].id;
         //cout << "Armor id: " << item.id << endl;
@@ -391,6 +331,13 @@ void callback(const sensor_msgs::ImageConstPtr& msg)
     //result_msg.img = *cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
 }
 
+void adjustment_callback(const geometry_msgs::Vector3::ConstPtr& msg)
+{
+    center += cv::Point3f(msg->x, msg->y, msg->z);
+    std::cout << "Received adjustment: " << msg->x << " " << msg->y << " " << msg->z << std::endl;
+    std::cout << "Current center: " << center << std::endl;
+}
+
 void aimImage(Mat &img)
 {
     auto start = chrono::high_resolution_clock::now();
@@ -407,11 +354,13 @@ void aimImage(Mat &img)
     
     aim_object.aim(gamma_changed_img, color);
     
-    if (aiming_cnt % 20 == 0 /*|| aim_object.needPublish()*/)
+    /*
+    if (aiming_cnt % 20 == 0 || aim_object.needPublish())
     {
         aim_object.publishStatus(); // Only used in RMUL2023
         cout << "Published armor" << endl;
     }
+    */
     
     auto time1 = chrono::high_resolution_clock::now();
     auto duration0 = chrono::duration_cast<chrono::nanoseconds>(time1 - time0).count() / 1e9;
@@ -447,9 +396,12 @@ int main(int argc, char **argv)
 
     //aim_object.img_pub = n.advertise<sensor_msgs::Image>("cropped_armor_images", 10);
     aim_object.armor_pub = n.advertise<std_msgs::Bool>("armor_in_sight", 10);
+    image_transport::ImageTransport it(n);
+    aim_object.image_pub = it.advertise("annotated_image", 10);
     //aim_object.recognition_client = n.serviceClient<number_recognition::img_msg>("Recognition");
     //ros::Subscriber target_sub = n.subscribe("decision/attack", 10, targetCallback);
     //ros::Subscriber game_start_sub = n.subscribe()
+    ros::Subscriber sub_adjustment = n.subscribe("auto_aiming_adjustment", 10, adjustment_callback);
     if (USE_ROS)
     {
         ros::Subscriber sub = n.subscribe("hikrobot_camera/rgb", 10, callback);

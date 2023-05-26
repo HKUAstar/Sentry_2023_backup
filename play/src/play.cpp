@@ -3,7 +3,7 @@
 #include "tools.h"
 using namespace std;
 
-const double PITCH_OFFSET = 0.000;
+const double PITCH_OFFSET = 0.013;
 
 int main(int argc, char** argv)
 {
@@ -15,8 +15,7 @@ int main(int argc, char** argv)
 
     while (ros::ok())
     {
-        controller.shoot(1);
-        getline(cin, s);
+        controller.moveGimbal(0.02, 0.00, 0.025);
         ros::spinOnce();
     }
 

@@ -53,11 +53,15 @@
   <build_depend>roscpp</build_depend>
   <build_depend>msgs</build_depend>
   <build_depend>move_test</build_depend>
+  <build_depend>roborts_msgs</build_depend>
   <build_depend>referee_system</build_depend>
+  <build_depend>number_recognition</build_depend>
   <build_export_depend>rospy</build_export_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>msgs</exec_depend>
+  <exec_depend>roborts_msgs</exec_depend>
+  <exec_depend>number_recognition</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

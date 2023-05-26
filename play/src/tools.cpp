@@ -12,12 +12,14 @@ Controller::Controller()
     client = n.serviceClient<roborts_msgs::ShootCmd>("/cmd_shoot");
     wheel_client = n.serviceClient<roborts_msgs::FricWhl>("/cmd_fric_wheel");
 
+    /*
     roborts_msgs::FricWhl srv;
     srv.request.open = true;
     if (wheel_client.call(srv))
         std::cout << "Wheel service call successful." << std::endl;
     else
         std::cout << "Wheel service call unsuccessful." << std::endl;
+    */
 
     count = 0;
 }

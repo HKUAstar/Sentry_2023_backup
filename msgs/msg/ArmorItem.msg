@@ -1,2 +1,10 @@
+uint32 x1
+uint32 y1
+uint32 x2
+uint32 y2
+uint32 x3
+uint32 y3
+uint32 x4
+uint32 y4
 float32 area
 uint32 id
